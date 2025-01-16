@@ -105,12 +105,12 @@ df_patient_race_ethnicity = df_patient_race_ethnicity.withColumn("birth_date", c
 # Extracting encounter information
 df_encounter = df_exploded.filter(col("entry.resource.resourceType") == "Encounter").select(
     col("entry.resource.id").alias("encounter_id"),
-    col("entry.resource.subject.reference").alias("patient_reference"),
+    col("entry.resource.subject.reference").alias("encounter_reference"),
     col("entry.resource.status").alias("encounter_status"),
     col("entry.resource.class.code").alias("class_code"),
     col("entry.resource.class.system").alias("class_system"),
     col("entry.resource.type").alias("type_text"), 
-    col("entry.resource.subject.reference").alias("individual_reference"),
+    #col("entry.resource.subject.reference").alias("individual_reference"),
     col("entry.resource.subject.display").alias("subject_display"),
     col("entry.resource.period.start").alias("period_start"),
     col("entry.resource.period.end").alias("period_end"),
@@ -134,6 +134,10 @@ df_participant_details = df_participant.select(
 
 # Joining encounter data with participant details
 df_encounter_full = df_encounter.join(df_participant_details, how="left")
+df_encounter_full = df_encounter_full.withColumn("period_start", col("period_start").cast(TimestampType())) \
+                                     .withColumn("period_end", col("period_end").cast(TimestampType())) \
+                                     .withColumn("participant_period_start", col("participant_period_start").cast(TimestampType())) \
+                                     .withColumn("participant_period_end", col("participant_period_end").cast(TimestampType()))
 
 # Show the result
 #df_encounter_full.show(truncate=False)
@@ -151,7 +155,7 @@ df_condition = df_exploded.filter(col("entry.resource.resourceType") == "Conditi
     col("entry.resource.code.coding").getItem(0).getField("code").alias("condition_code"),
     col("entry.resource.code.coding").getItem(0).getField("display").alias("condition_display"),
     col("entry.resource.code.text").alias("condition_text"),
-    col("entry.resource.subject.reference").alias("subject_reference"),
+    #col("entry.resource.subject.reference").alias("patient_reference"),
     col("entry.resource.encounter.reference").alias("encounter_reference"),
     col("entry.resource.onsetDateTime").alias("onset_datetime"),
     col("entry.resource.recordedDate").alias("recorded_datetime")
@@ -159,21 +163,22 @@ df_condition = df_exploded.filter(col("entry.resource.resourceType") == "Conditi
 
 # Extracting DiagnosticReport information
 df_diagnostic_report = df_exploded.filter(col("entry.resource.resourceType") == "DiagnosticReport").select(
-    col("entry.resource.id").alias("report_id"),
+    col("entry.resource.id").alias("diagnostic_report_id"),
     col("entry.resource.status").alias("status"),
     col("entry.resource.effectiveDateTime").alias("effective_datetime"),
     col("entry.resource.issued").alias("issued_datetime"),
     col("entry.resource.subject.reference").alias("patient_reference"),
-    col("entry.resource.encounter.reference").alias("encounter_reference"),
+    #col("entry.resource.encounter.reference").alias("encounter_reference"),
     col("entry.resource.performer").getItem(0).getField("reference").alias("performer_reference"),
     col("entry.resource.performer").getItem(0).getField("display").alias("performer_display"),
     col("entry.resource.category").getItem(0).getField("coding").getItem(0).getField("code").alias("category_code"),
     col("entry.resource.category").getItem(0).getField("coding").getItem(0).getField("display").alias("category_display"),
     col("entry.resource.code").getField("coding").getItem(0).getField("code").alias("code"),
-    col("entry.resource.code").getField("coding").getItem(0).getField("display").alias("code_display"),
+    col("entry.resource.code").getField("coding").getItem(0).getField("display").alias("display"),
     col("entry.resource.presentedForm").getItem(0).getField("contentType").alias("content_type"),
     col("entry.resource.presentedForm").getItem(0).getField("data").alias("data")
 )
+
 
 # Show the result
 #df_diagnostic_report.show(truncate=False)
@@ -245,11 +250,20 @@ df_care_plan = df_exploded.filter(col("entry.resource.resourceType") == "CarePla
 #df_care_plan.show(truncate=False)
 df_procedure = df_exploded.filter(col("entry.resource.resourceType") == "Procedure").select( col("entry.resource.id").alias("procedure_id"), col("entry.resource.meta.profile")[0].alias("profile"), col("entry.resource.status").alias("status"), col("entry.resource.code.coding")[0].getField("system").alias("code_system"), col("entry.resource.code.coding")[0].getField("code").alias("code"), col("entry.resource.code.coding")[0].getField("display").alias("code_display"), col("entry.resource.code.text").alias("code_text"), col("entry.resource.subject.reference").alias("subject_reference"), col("entry.resource.encounter.reference").alias("encounter_reference"), col("entry.resource.performedPeriod.start").alias("performed_period_start"), col("entry.resource.performedPeriod.end").alias("performed_period_end"), col("entry.resource.location").alias("location") ) 
 #df_procedure.show(truncate=False)
-df_immunization = df_exploded.filter(col("entry.resource.resourceType") == "Immunization").select( col("entry.resource.id").alias("immunization_id"),col("entry.resource.subject.reference").alias("patient_reference"), col("entry.resource.meta.profile")[0].alias("profile"), col("entry.resource.status").alias("status"), col("entry.resource.vaccineCode.coding")[0].getField("system").alias("vaccine_code_system"), col("entry.resource.vaccineCode.coding")[0].getField("code").alias("vaccine_code"), col("entry.resource.vaccineCode.coding")[0].getField("display").alias("vaccine_code_display"), col("entry.resource.vaccineCode.text").alias("vaccine_text"), col("entry.resource.patient.reference").alias("patient_reference"), col("entry.resource.encounter.reference").alias("encounter_reference"), col("entry.resource.occurrenceDateTime").alias("occurrence_date_time"), col("entry.resource.primarySource").alias("primary_source"), col("entry.resource.location").alias("location") ) 
+df_immunization = df_exploded.filter(col("entry.resource.resourceType") == "Immunization").select( col("entry.resource.id").alias("immunization_id"),col("entry.resource.subject.reference").alias("immunization_reference"), col("entry.resource.meta.profile")[0].alias("profile"), col("entry.resource.status").alias("status"), col("entry.resource.vaccineCode.coding")[0].getField("system").alias("vaccine_code_system"), col("entry.resource.vaccineCode.coding")[0].getField("code").alias("vaccine_code"), col("entry.resource.vaccineCode.coding")[0].getField("display").alias("vaccine_code_display"), col("entry.resource.vaccineCode.text").alias("vaccine_text"), col("entry.resource.patient.reference").alias("patient_reference"), col("entry.resource.encounter.reference").alias("encounter_reference"), col("entry.resource.occurrenceDateTime").alias("occurrence_date_time"), col("entry.resource.primarySource").alias("primary_source"), col("entry.resource.location").alias("location") ) 
 #df_immunization.show(truncate=False)
 
+# Collect all unique patient_id values from the Patient DataFrame
+patient_ids = df_patient_race_ethnicity.select("patient_id").rdd.flatMap(lambda x: x).collect()
 
-#write_to_postgres(df_patient_race_ethnicity, "patient")
+df_condition = df_condition.filter(col("patient_reference").isin(patient_ids)).dropDuplicates(["condition_id"]) \
+                           .withColumn("onset_datetime", col("onset_datetime").cast(TimestampType())) \
+                           .withColumn("recorded_datetime", col("recorded_datetime").cast(TimestampType()))
+
+
+write_to_postgres(df_patient_race_ethnicity, "patient")
+
+
 write_to_postgres(df_encounter_full, "encounter")
 write_to_postgres(df_condition, "condition")
 write_to_postgres(df_diagnostic_report, "diagnosticreport")
@@ -261,9 +275,6 @@ write_to_postgres(df_care_team, "careteam")
 write_to_postgres(df_care_plan, "careplan")
 write_to_postgres(df_procedure, "procedure")
 write_to_postgres(df_immunization, "immunization")
-
-
-
 
 # Stop the Spark session when done
 spark.stop()
