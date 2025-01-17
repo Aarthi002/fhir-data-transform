@@ -3,6 +3,7 @@ from pyspark.sql.functions import col, explode, when,size,expr
 import os
 from dotenv import load_dotenv
 from pyspark.sql.types import DateType, TimestampType
+
 # Load environment variables from the .env file
 load_dotenv("config/database.env")
 
@@ -11,6 +12,8 @@ db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
 db_host = os.getenv("DB_HOST")
 db_port = os.getenv("DB_PORT")
+
+
 db_name = os.getenv("DB_NAME")
 
 # Check if environment variables are loaded
@@ -97,10 +100,6 @@ df_patient_race_ethnicity = df_patient_only.join(df_race_value, how="left").join
 # Show the result
 df_patient_race_ethnicity = df_patient_race_ethnicity.withColumn("birth_date", col("birth_date").cast(DateType())) \
                                                      .withColumn("deceased_date_time", col("deceased_date_time").cast(TimestampType()))
-
-
-
-
 
 # Extracting encounter information
 df_encounter = df_exploded.filter(col("entry.resource.resourceType") == "Encounter").select(
@@ -253,17 +252,7 @@ df_procedure = df_exploded.filter(col("entry.resource.resourceType") == "Procedu
 df_immunization = df_exploded.filter(col("entry.resource.resourceType") == "Immunization").select( col("entry.resource.id").alias("immunization_id"),col("entry.resource.subject.reference").alias("immunization_reference"), col("entry.resource.meta.profile")[0].alias("profile"), col("entry.resource.status").alias("status"), col("entry.resource.vaccineCode.coding")[0].getField("system").alias("vaccine_code_system"), col("entry.resource.vaccineCode.coding")[0].getField("code").alias("vaccine_code"), col("entry.resource.vaccineCode.coding")[0].getField("display").alias("vaccine_code_display"), col("entry.resource.vaccineCode.text").alias("vaccine_text"), col("entry.resource.patient.reference").alias("patient_reference"), col("entry.resource.encounter.reference").alias("encounter_reference"), col("entry.resource.occurrenceDateTime").alias("occurrence_date_time"), col("entry.resource.primarySource").alias("primary_source"), col("entry.resource.location").alias("location") ) 
 #df_immunization.show(truncate=False)
 
-# Collect all unique patient_id values from the Patient DataFrame
-patient_ids = df_patient_race_ethnicity.select("patient_id").rdd.flatMap(lambda x: x).collect()
-
-df_condition = df_condition.filter(col("patient_reference").isin(patient_ids)).dropDuplicates(["condition_id"]) \
-                           .withColumn("onset_datetime", col("onset_datetime").cast(TimestampType())) \
-                           .withColumn("recorded_datetime", col("recorded_datetime").cast(TimestampType()))
-
-
 write_to_postgres(df_patient_race_ethnicity, "patient")
-
-
 write_to_postgres(df_encounter_full, "encounter")
 write_to_postgres(df_condition, "condition")
 write_to_postgres(df_diagnostic_report, "diagnosticreport")
@@ -275,6 +264,54 @@ write_to_postgres(df_care_team, "careteam")
 write_to_postgres(df_care_plan, "careplan")
 write_to_postgres(df_procedure, "procedure")
 write_to_postgres(df_immunization, "immunization")
+
+
+def perform_reconciliation(input_df, resource_type):
+
+
+    # Load data from PostgreSQL table for reconciliation
+    df_postgres = spark.read.jdbc(url=jdbc_url, table=resource_type.lower(), properties=write_properties)
+   
+
+    
+# Determine the key column for reconciliation
+    key_column = "id"
+    if resource_type == "Patient":
+        key_column = "patient_id"
+    elif resource_type == "Encounter":
+        key_column = "encounter_id"
+    elif resource_type == "Condition":
+        key_column = "condition_id"
+    elif resource_type == "Procedure":
+        key_column = "procedure_id"
+    elif resource_type == "Immunization":
+        key_column = "immunization_id"
+
+    # Reconciliation Process
+    recon_result = input_df.join(df_postgres, input_df[key_column] == df_postgres[key_column], "outer") \
+        .select(input_df[key_column].alias("input_key"), df_postgres[key_column].alias("postgres_key")) \
+        .withColumn("status", 
+                    when(col("input_key").isNull(), "Missing in Input")
+                    .when(col("postgres_key").isNull(), "Missing in PostgreSQL")
+                    .otherwise("Match")) \
+        .withColumn("discrepancy_type",
+                    when(col("input_key").isNull(), "Missing in Input")
+                    .when(col("postgres_key").isNull(), "Missing in PostgreSQL")
+                    .otherwise("Match"))
+
+    # Generate reconciliation report
+    recon_report = recon_result.groupBy("status").agg(count("*").alias("count"))
+    recon_report.show()
+
+    # Handle discrepancies by writing to Reconciliation table
+    discrepancies = recon_result.filter(col("status") != "Match") \
+                                .select(col("input_key").alias("resource_id"), col("status"), col("discrepancy_type"))
+
+    discrepancies.show()  # Debugging
+
+    discrepancies.write.mode("append").jdbc(url=jdbc_url, table="reconciliation", properties=write_properties)
+
+perform_reconciliation(df_patient_race_ethnicity)
 
 # Stop the Spark session when done
 spark.stop()
