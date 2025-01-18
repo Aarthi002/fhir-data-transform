@@ -35,7 +35,7 @@ spark = SparkSession.builder \
     .config("spark.sql.debug.maxToStringFields", 1000) \
     .getOrCreate()
 
-json_file_path = "data/Beth967_Hansen121_4e343b0a-8698-b6dd-64c6-c2d2d0959e6e.json"
+json_file_path = "data/Bette450_Anderson154_6e4ac285-2a8d-a30d-5ecb-e32cb595a876.json"
 
 # Read the JSON file into a DataFrame
 if not os.path.exists(json_file_path):
@@ -138,8 +138,8 @@ for resource_type in resource_types:
                     col("entry.resource.clinicalStatus.coding").getItem(0).getField("system").alias("clinical_status_system"),
                     col("entry.resource.verificationStatus.coding").getItem(0).getField("code").alias("verification_status_code"),
                     col("entry.resource.verificationStatus.coding").getItem(0).getField("system").alias("verification_status_system"),
-                    col("entry.resource.category").getItem(0).getField("coding").getItem(0).getField("code").alias("category_code"),
-                    col("entry.resource.category").getItem(0).getField("coding").getItem(0).getField("display").alias("category_display"),
+                    col("entry.resource.category")[0].getField("coding").getItem(0).getField("code").alias("category_code"),
+                    col("entry.resource.category")[0].getField("coding").getItem(0).getField("display").alias("category_display"),
                     col("entry.resource.code.coding").getItem(0).getField("code").alias("condition_code"),
                     col("entry.resource.code.coding").getItem(0).getField("display").alias("condition_display"),
                     col("entry.resource.code.text").alias("condition_text"),
@@ -307,8 +307,9 @@ def perform_reconciliation(input_df, resource_type):
 
     # Handle discrepancies by writing to Reconciliation table
     discrepancies = recon_result.filter(col("status") != "Match") \
-                                .select(col("patient_id"), col("status"))
+                             .select(col("patient_id"), col("status"))
 
+    
     discrepancies.show()  # Debugging
 
     discrepancies.write.mode("append").jdbc(url=jdbc_url, table="reconciliation", properties=write_properties)
