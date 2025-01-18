@@ -1,0 +1,67 @@
+/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+Traceback (most recent call last):
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_psosx.py", line 349, in wrapper
+    return fun(self, *args, **kwargs)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_common.py", line 508, in wrapper
+    raise raise_from(err, None)
+  File "<string>", line 3, in raise_from
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_common.py", line 506, in wrapper
+    return fun(self)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_psosx.py", line 375, in _get_kinfo_proc
+    ret = cext.proc_kinfo_oneshot(self.pid)
+ProcessLookupError: [Errno 3] assume no such process (originated from sysctl(kinfo_proc), len == 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/__init__.py", line 355, in _init
+    self._ident = self._get_ident()
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/__init__.py", line 396, in _get_ident
+    return (self.pid, self.create_time())
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/__init__.py", line 778, in create_time
+    self._create_time = self._proc.create_time()
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_psosx.py", line 349, in wrapper
+    return fun(self, *args, **kwargs)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_psosx.py", line 477, in create_time
+    return self._get_kinfo_proc()[kinfo_proc_map['ctime']]
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/_psosx.py", line 354, in wrapper
+    raise NoSuchProcess(self.pid, self._name)
+psutil.NoSuchProcess: process no longer exists (pid=20886)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/bin/airflow", line 8, in <module>
+    sys.exit(main())
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/__main__.py", line 62, in main
+    args.func(args)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/cli_config.py", line 49, in command
+    return func(*args, **kwargs)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/utils/cli.py", line 116, in wrapper
+    return f(*args, **kwargs)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/utils/providers_configuration_loader.py", line 55, in wrapped_function
+    return func(*args, **kwargs)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 485, in webserver
+    run_command_with_daemon_option(
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/daemon_utils.py", line 81, in run_command_with_daemon_option
+    callback()
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 488, in <lambda>
+    callback=lambda: start_and_monitor_gunicorn(args),
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 472, in start_and_monitor_gunicorn
+    monitor_gunicorn(gunicorn_master_proc)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 448, in monitor_gunicorn
+    GunicornMonitor(
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 211, in start
+    self._wait_until_true(
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 157, in _wait_until_true
+    while not fn():
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 212, in <lambda>
+    lambda: self.num_workers_expected == self._get_num_workers_running(),
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/airflow/cli/commands/webserver_command.py", line 151, in _get_num_workers_running
+    workers = psutil.Process(self.gunicorn_master_proc.pid).children()
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/__init__.py", line 319, in __init__
+    self._init(pid)
+  File "/Users/aarthimurali/Documents/GitHub/fhir-data-transform/venv/lib/python3.9/site-packages/psutil/__init__.py", line 368, in _init
+    raise NoSuchProcess(pid, msg=msg)
+psutil.NoSuchProcess: process PID not found (pid=20886)
