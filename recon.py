@@ -57,7 +57,7 @@ def write_to_postgres(df_resource, resource_type):
         jdbc_url = "jdbc:postgresql://localhost:5432/fhir_data"
         write_properties = {
             "user": "aarthi",
-            "password": "<YOUR_PASSWORD>",
+            "password": "aarthi",
             "driver": "org.postgresql.Driver"
         }
         df_resource.write.jdbc(url=jdbc_url, table=resource_type.lower(), mode="append", properties=write_properties)
@@ -254,7 +254,7 @@ def perform_reconciliation(input_df, resource_type):
     jdbc_url = "jdbc:postgresql://localhost:5432/fhir_data"
     write_properties = {
         "user": "aarthi",
-        "password": "<YOUR_PASSWORD>",
+        "password": "aarthi",
         "driver": "org.postgresql.Driver"
     }
     df_postgres = spark.read.jdbc(url=jdbc_url, table=resource_type.lower(), properties=write_properties)

@@ -55,7 +55,7 @@ def write_to_postgres(df_resource, resource_type):
         jdbc_url = "jdbc:postgresql://localhost:5432/fhir_data"
         write_properties = {
             "user": "aarthi",
-            "password": "<YOUR_PASSWORD>",
+            "password": "aarthi",
             "driver": "org.postgresql.Driver"
         }
         df_resource.write.jdbc(url=jdbc_url, table=resource_type.lower(), mode="append", properties=write_properties)
@@ -261,5 +261,86 @@ for json_file_path in json_files:
     print(f"Copied processed file to: {processed_folder}")
 
 print("Processing of all files complete.")
+
+
+# Reconciliation Process
+def perform_reconciliation(input_df, resource_type):
+    print(f"Starting reconciliation for {resource_type}...")
+    
+    # Load data from PostgreSQL table for reconciliation
+    jdbc_url = "jdbc:postgresql://localhost:5432/fhir_data"
+    write_properties = {
+        "user": "aarthi",
+        "password": "aarthi",
+        "driver": "org.postgresql.Driver"
+    }
+    df_postgres = spark.read.jdbc(url=jdbc_url, table=resource_type.lower(), properties=write_properties)
+
+    # Determine the key column for reconciliation
+    key_column = None
+    if resource_type == "Patient":
+        key_column = "patient_id"
+    elif resource_type == "Encounter":
+        key_column = "encounter_id"
+    elif resource_type == "Condition":
+        key_column = "condition_id"
+    elif resource_type == "DiagnosticReport":
+        key_column = "diagnostic_report_id"
+    elif resource_type == "Claim":
+        key_column = "claim_id"
+    elif resource_type == "DocumentReference":
+        key_column = "document_id"
+    elif resource_type == "ExplanationOfBenefit":
+        key_column = "eob_id"
+    elif resource_type == "MedicationRequest":
+        key_column = "medication_request_id"
+    elif resource_type == "CareTeam":
+        key_column = "care_team_id"
+    elif resource_type == "CarePlan":
+        key_column = "care_plan_id"
+    elif resource_type == "Procedure":
+        key_column = "procedure_id"
+    elif resource_type == "Immunization":
+        key_column = "immunization_id"
+    else:
+        print(f"Unknown resource type: {resource_type}") 
+        return
+    # Ensure patient_id is captured correctly
+    df_postgres = df_postgres.withColumnRenamed(key_column, f"postgres_{key_column}")
+    input_df = input_df.withColumnRenamed(key_column, f"input_{key_column}")
+
+    # Reconciliation Process
+    recon_result = input_df.join(df_postgres, input_df[f"input_{key_column}"] == df_postgres[f"postgres_{key_column}"], "outer") \
+        .select(coalesce(input_df[f"input_{key_column}"], df_postgres[f"postgres_{key_column}"]).alias("patient_id"), \
+                input_df[f"input_{key_column}"], df_postgres[f"postgres_{key_column}"]) \
+        .withColumn("status", 
+                    when(col(f"input_{key_column}").isNull(), "Missing in Input")
+                    .when(col(f"postgres_{key_column}").isNull(), "Missing in PostgreSQL")
+                    .otherwise("Match")) \
+
+    # Generate reconciliation report
+    recon_report = recon_result.groupBy("status").agg(count("*").alias("count"))
+    recon_report.show()
+
+    # Handle discrepancies by writing to Reconciliation table
+    discrepancies = recon_result.filter(col("status") != "Match") \
+                             .select(col("patient_id"), col("status"))
+
+    
+    discrepancies.show() 
+
+    discrepancies.write.mode("append").jdbc(url=jdbc_url, table="reconciliation", properties=write_properties)
+    print(f"Reconciliation for {resource_type} complete.")
+
+# Perform reconciliation for each resource type
+for resource_type, df in processed_data.items():
+    perform_reconciliation(df, resource_type)
+
+print("Reconciliation complete.")
+    
+
+# Stop Spark session
+spark.stop()
+
 
  
