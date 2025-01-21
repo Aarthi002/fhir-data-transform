@@ -4,9 +4,12 @@ from pyspark.sql.functions import col, explode, when,size,expr,count,lit,coalesc
 import os
 from dotenv import load_dotenv
 from pyspark.sql.types import DateType, TimestampType
+import shutil
 
 # Load environment variables from the .env file
 load_dotenv("config/database.env")
+
+processed_folder = "processed/"
 
 # Database credentials from environment variables
 db_user = os.getenv("DB_USER")
@@ -222,7 +225,6 @@ for json_file_path in json_files:
                     col("entry.resource.requester.display").alias("requester_display"),
                     col("entry.resource.reasonReference")[0].getField("reference").alias("reason_reference"),
                     col("entry.resource.dosageInstruction")[0].getField("sequence").alias("dosage_sequence"),
-                    #col("entry.resource.dosageInstruction")[0].getField("text").alias("dosage_text"),
                     col("entry.resource.dosageInstruction")[0].getField("asNeededBoolean").alias("as_needed_boolean")
                     )
         
@@ -243,18 +245,21 @@ for json_file_path in json_files:
         df_resource.printSchema()
         print(f"Data for {resource_type}:")
         df_resource.show(5)
+    
 
-
-        # Existing logic for each resource type (Patient, Encounter, etc.)
-        # Insert the resource processing code here.
-        # ...
-        
-        # Write the processed data to PostgreSQL
         if not write_to_postgres(df_resource, resource_type):
             print(f"Stopping processing due to failure in writing {resource_type} data for {json_file_path}.")
             break
-        
-        # Store the processed DataFrame
+         # Store the processed DataFrame
         processed_data[resource_type] = df_resource
+    
+    # Move the processed file to the 'processed' folder
+    #shutil.move(json_file_path, os.path.join(processed_folder, os.path.basename(json_file_path)))
+    #print(f"Moved processed file to: {processed_folder}")
+    # Copy the processed file to the 'processed' folder
+    shutil.copy(json_file_path, os.path.join(processed_folder, os.path.basename(json_file_path)))
+    print(f"Copied processed file to: {processed_folder}")
 
 print("Processing of all files complete.")
+
+ 
