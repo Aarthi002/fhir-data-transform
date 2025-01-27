@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from pyspark.sql.types import DateType, TimestampType
 import shutil
-
+from pyspark.sql import Row
 # Load environment variables from the .env file
 load_dotenv("config/database.env")
 
@@ -50,12 +50,25 @@ if not json_files:
     spark.stop()
     exit()
 
+def get_postgres_row_count(resource_type):
+    jdbc_url = f"jdbc:postgresql://{db_host}:{db_port}/{db_name}"
+    query = f"(SELECT COUNT(*) FROM {resource_type.lower()}) AS count_table"
+    
+    try:
+        # Read the row count from PostgreSQL using JDBC
+        row_count_df = spark.read.jdbc(url=jdbc_url, table=query, properties={"user": db_user, "password": db_password, "driver": "org.postgresql.Driver"})
+        row_count = row_count_df.collect()[0][0]  # Get the count value
+        return row_count
+    except Exception as e:
+        print(f"Error fetching row count for {resource_type} from PostgreSQL: {e}")
+        return 0
+
 def write_to_postgres(df_resource, resource_type):
     try:
-        jdbc_url = "jdbc:postgresql://localhost:5432/fhir_data"
+        jdbc_url = f"jdbc:postgresql://{db_host}:{db_port}/{db_name}"
         write_properties = {
-            "user": "aarthi",
-            "password": "aarthi",
+            "user": db_user,
+            "password": db_password,
             "driver": "org.postgresql.Driver"
         }
         df_resource.write.jdbc(url=jdbc_url, table=resource_type.lower(), mode="append", properties=write_properties)
@@ -65,6 +78,18 @@ def write_to_postgres(df_resource, resource_type):
         print(f"Failed to write data for {resource_type} to PostgreSQL. Error: {e}")
         return False
 
+def log_reconciliation(resource_type, json_file, rows_in_dataframe, rows_written, rows_diff, status):
+    try:
+        # Create a Spark DataFrame with reconciliation data
+        reconciliation_data = [(resource_type, json_file, rows_in_dataframe, rows_written, rows_diff, status)]
+        reconciliation_df = spark.createDataFrame(reconciliation_data, ["resource_type", "json_file", "rows_in_dataframe", "rows_written", "rows_diff", "status"])
+        
+        # Write the reconciliation data to the PostgreSQL table
+        jdbc_url = f"jdbc:postgresql://{db_host}:{db_port}/{db_name}"
+        reconciliation_df.write.jdbc(url=jdbc_url, table="reconciliation", mode="append", properties={"user": db_user, "password": db_password, "driver": "org.postgresql.Driver"})
+        print(f"Logged reconciliation for {resource_type}.")
+    except Exception as e:
+        print(f"Error logging reconciliation for {resource_type}: {e}")
 
 # Loop through each JSON file
 for json_file_path in json_files:
@@ -246,98 +271,35 @@ for json_file_path in json_files:
         print(f"Data for {resource_type}:")
         df_resource.show(5)
     
+        # Get initial row count from PostgreSQL
+        initial_row_count = get_postgres_row_count(resource_type)
 
+        # Write to PostgreSQL and get row count written
         if not write_to_postgres(df_resource, resource_type):
             print(f"Stopping processing due to failure in writing {resource_type} data for {json_file_path}.")
             break
-         # Store the processed DataFrame
-        processed_data[resource_type] = df_resource
+        
+        # Get the new row count after writing data
+        new_row_count = get_postgres_row_count(resource_type)
+        
+        # Calculate rows written
+        rows_written = new_row_count - initial_row_count
+        
+        # Calculate rows difference
+        rows_diff = rows_written - df_resource.count()
+
+        # Log reconciliation
+        status = "Success" if rows_diff == 0 else "Mismatch"
+        log_reconciliation(resource_type, json_file_path, df_resource.count(), rows_written, rows_diff, status)
     
     # Move the processed file to the 'processed' folder
-    #shutil.move(json_file_path, os.path.join(processed_folder, os.path.basename(json_file_path)))
-    #print(f"Moved processed file to: {processed_folder}")
-    # Copy the processed file to the 'processed' folder
     shutil.copy(json_file_path, os.path.join(processed_folder, os.path.basename(json_file_path)))
     print(f"Copied processed file to: {processed_folder}")
+
 
 print("Processing of all files complete.")
 
 
-# Reconciliation Process
-def perform_reconciliation(input_df, resource_type):
-    print(f"Starting reconciliation for {resource_type}...")
-    
-    # Load data from PostgreSQL table for reconciliation
-    jdbc_url = "jdbc:postgresql://localhost:5432/fhir_data"
-    write_properties = {
-        "user": "aarthi",
-        "password": "aarthi",
-        "driver": "org.postgresql.Driver"
-    }
-    df_postgres = spark.read.jdbc(url=jdbc_url, table=resource_type.lower(), properties=write_properties)
-
-    # Determine the key column for reconciliation
-    key_column = None
-    if resource_type == "Patient":
-        key_column = "patient_id"
-    elif resource_type == "Encounter":
-        key_column = "encounter_id"
-    elif resource_type == "Condition":
-        key_column = "condition_id"
-    elif resource_type == "DiagnosticReport":
-        key_column = "diagnostic_report_id"
-    elif resource_type == "Claim":
-        key_column = "claim_id"
-    elif resource_type == "DocumentReference":
-        key_column = "document_id"
-    elif resource_type == "ExplanationOfBenefit":
-        key_column = "eob_id"
-    elif resource_type == "MedicationRequest":
-        key_column = "medication_request_id"
-    elif resource_type == "CareTeam":
-        key_column = "care_team_id"
-    elif resource_type == "CarePlan":
-        key_column = "care_plan_id"
-    elif resource_type == "Procedure":
-        key_column = "procedure_id"
-    elif resource_type == "Immunization":
-        key_column = "immunization_id"
-    else:
-        print(f"Unknown resource type: {resource_type}") 
-        return
-    # Ensure patient_id is captured correctly
-    df_postgres = df_postgres.withColumnRenamed(key_column, f"postgres_{key_column}")
-    input_df = input_df.withColumnRenamed(key_column, f"input_{key_column}")
-
-    # Reconciliation Process
-    recon_result = input_df.join(df_postgres, input_df[f"input_{key_column}"] == df_postgres[f"postgres_{key_column}"], "outer") \
-        .select(coalesce(input_df[f"input_{key_column}"], df_postgres[f"postgres_{key_column}"]).alias("patient_id"), \
-                input_df[f"input_{key_column}"], df_postgres[f"postgres_{key_column}"]) \
-        .withColumn("status", 
-                    when(col(f"input_{key_column}").isNull(), "Missing in Input")
-                    .when(col(f"postgres_{key_column}").isNull(), "Missing in PostgreSQL")
-                    .otherwise("Match")) \
-
-    # Generate reconciliation report
-    recon_report = recon_result.groupBy("status").agg(count("*").alias("count"))
-    recon_report.show()
-
-    # Handle discrepancies by writing to Reconciliation table
-    discrepancies = recon_result.filter(col("status") != "Match") \
-                             .select(col("patient_id"), col("status"))
-
-    
-    discrepancies.show() 
-
-    discrepancies.write.mode("append").jdbc(url=jdbc_url, table="reconciliation", properties=write_properties)
-    print(f"Reconciliation for {resource_type} complete.")
-
-# Perform reconciliation for each resource type
-for resource_type, df in processed_data.items():
-    perform_reconciliation(df, resource_type)
-
-print("Reconciliation complete.")
-    
 
 # Stop Spark session
 spark.stop()
